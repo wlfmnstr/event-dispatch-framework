@@ -690,22 +690,41 @@ The reworked PRD should explicitly preserve the following changes:
 
 The next iteration after this PRD should focus on the following concrete design artifacts:
 
-1. **Layer 1 manifest schema sketch**  
-   Write the first concrete YAML shape for system, components, interfaces, contracts, and integrations.
+1. **Boundary-modeling decision package (interfaces vs integrations)**
+   Lock the Layer 1 rule that **interfaces and integrations both remain top-level sections**, with distinct roles:
+   - interfaces define boundary surfaces and contracts,
+   - integrations define concrete wiring between boundaries.
+
+   The next schema draft should include explicit validation rules:
+   - every integration must reference a declared source and target interface,
+   - interfaces may exist without integrations (declared but not yet connected),
+   - integrations may not define inline contracts that bypass interface declarations.
 
 2. **Layer 1 primitive decision record**  
    Explicitly justify each primitive and each non-primitive.
 
-3. **Layer 2 lifecycle schema sketch**  
-   Define the first concrete YAML shape for work types, lifecycle models, correlation rules, and observation surfaces.
+3. **Dispatch surface normalization decision (dispatch block vs interfaces)**
+   Clarify that submit/query/history surfaces are modeled as **normal Layer 1 interfaces** and not as a separate top-level primitive family inside `dispatch`.
 
-4. **Canonical dispatch API surface definition**  
-   Decide the standard submit/query/history patterns the framework should assume.
+   The `dispatch` block should keep only dispatch-specific semantics (work types, lifecycle models, correlation rules, status detail rules). Surface-specific behavior should be linked by reference to Layer 1 interfaces.
 
-5. **Generated asset matrix**  
+4. **Lifecycle transition rule model upgrade**
+   Extend transition declarations beyond simple `from -> to` edges with an optional rule envelope:
+   - preconditions/guards,
+   - actor or source constraints,
+   - idempotency/re-entry behavior,
+   - required status detail fields,
+   - transition side-effect classifications (declarative tags only, not execution logic).
+
+   Keep plain `from -> to` as the minimum valid form, with richer rule fields optional.
+
+5. **Canonical dispatch API surface definition**
+   Decide the standard submit/query/history patterns the framework should assume and map each pattern to Layer 1 interface definitions.
+
+6. **Generated asset matrix**
    Define exactly which outputs are generated from which manifest sections.
 
-6. **Two worked examples**  
+7. **Two worked examples**
    One generic integrated system using only Layer 1, and one event dispatch system using Layers 1 and 2.
 
 ---
@@ -717,7 +736,6 @@ The next iteration after this PRD should focus on the following concrete design 
 3. How opinionated should the framework be about standard envelope shapes for contracts?
 4. Should lifecycle models be reusable across multiple work types by reference?
 5. How much of dispatch-attempt representation belongs in Layer 2 versus later realization tooling?
-6. What is the minimum canonical API surface every dispatch system should expose?
+6. How strict should transition guard semantics be (expression language vs bounded condition types)?
 7. At what point, if any, should persistence concepts become a formal extension distinct from Layer 2?
 8. What generated artifacts are mandatory versus optional in v1?
-
