@@ -1,0 +1,399 @@
+manifestVersion: v1alpha1
+kind: SystemDefinition
+metadata:
+  name: coverage-update-dispatch
+  title: Coverage Update Dispatch System
+  summary: Accepts coverage update work, dispatches it to a downstream host system, and tracks canonical lifecycle state.
+  tags:
+    - dispatch
+    - stateful
+    - insurance
+
+system:
+  domain: insurance-operations
+  scope: Submit, dispatch, observe, and report lifecycle state for coverage update work items.
+  style: dispatch
+  owners:
+    - architecture
+    - claims-platform
+
+components:
+  - name: dispatch-api
+    type: api
+    summary: Accepts new coverage update work and serves query surfaces.
+    boundary: internal
+
+  - name: dispatch-core
+    type: service
+    summary: Canonical work and lifecycle management boundary.
+    boundary: internal
+
+  - name: host-adapter
+    type: adapter
+    summary: Delivers work to the external insurance host system and ingests host observations.
+    boundary: internal
+
+  - name: insurance-host
+    type: external_system
+    summary: External host system where coverage updates are ultimately applied.
+    boundary: external
+
+interfaces:
+  - name: submitCoverageUpdate
+    component: dispatch-api
+    direction: inbound
+    mechanism: http
+    summary: Accepts a new coverage update work item.
+    protocol:
+      method: POST
+      path: /coverage-updates
+    contracts:
+      - CoverageUpdateSubmission
+      - WorkSubmissionAccepted
+
+  - name: getCoverageUpdateById
+    component: dispatch-api
+    direction: inbound
+    mechanism: http
+    summary: Returns canonical current status for a work item.
+    protocol:
+      method: GET
+      path: /coverage-updates/{workItemId}
+    contracts:
+      - CoverageUpdateStatusView
+
+  - name: getCoverageUpdateHistory
+    component: dispatch-api
+    direction: inbound
+    mechanism: http
+    summary: Returns status history for a work item.
+    protocol:
+      method: GET
+      path: /coverage-updates/{workItemId}/history
+    contracts:
+      - CoverageUpdateStatusHistory
+
+  - name: sendCoverageUpdateToHost
+    component: host-adapter
+    direction: outbound
+    mechanism: queue
+    summary: Sends coverage update dispatch messages to the downstream host.
+    protocol:
+      channel: host.coverage.update.requests
+    contracts:
+      - HostCoverageUpdateRequest
+
+  - name: receiveCoverageUpdateStatusFromHost
+    component: host-adapter
+    direction: inbound
+    mechanism: webhook
+    summary: Receives asynchronous status notifications from the host.
+    protocol:
+      method: POST
+      path: /callbacks/host/coverage-updates
+    contracts:
+      - HostCoverageUpdateStatus
+
+contracts:
+  - name: CoverageUpdateSubmission
+    kind: request
+    summary: Canonical submission payload for a coverage update work item.
+    schema:
+      type: object
+      required:
+        - memberId
+        - planId
+        - effectiveDate
+        - requestedBy
+      properties:
+        memberId:
+          type: string
+        planId:
+          type: string
+        effectiveDate:
+          type: string
+          format: date
+        requestedBy:
+          type: string
+        coverageChanges:
+          type: array
+          items:
+            type: object
+            required:
+              - field
+              - newValue
+            properties:
+              field:
+                type: string
+              newValue:
+                type: string
+
+  - name: WorkSubmissionAccepted
+    kind: response
+    summary: Immediate response indicating that the work item was accepted canonically.
+    schema:
+      type: object
+      required:
+        - workItemId
+        - status
+        - acceptedAt
+      properties:
+        workItemId:
+          type: string
+        status:
+          type: string
+        acceptedAt:
+          type: string
+          format: date-time
+
+  - name: HostCoverageUpdateRequest
+    kind: message
+    summary: Canonical outbound request contract sent to the host adapter boundary.
+    schema:
+      type: object
+      required:
+        - workItemId
+        - memberId
+        - planId
+        - effectiveDate
+      properties:
+        workItemId:
+          type: string
+        memberId:
+          type: string
+        planId:
+          type: string
+        effectiveDate:
+          type: string
+          format: date
+        coverageChanges:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+
+  - name: HostCoverageUpdateStatus
+    kind: status
+    summary: Downstream host status notification payload.
+    schema:
+      type: object
+      required:
+        - hostReferenceId
+        - externalStatus
+        - observedAt
+      properties:
+        hostReferenceId:
+          type: string
+        externalStatus:
+          type: string
+        observedAt:
+          type: string
+          format: date-time
+        reasonCode:
+          type: string
+        detailMessage:
+          type: string
+
+  - name: DispatchAttemptRecord
+    kind: entity
+    summary: Canonical dispatch attempt record shape.
+    schema:
+      type: object
+      required:
+        - attemptId
+        - workItemId
+        - target
+        - createdAt
+        - status
+      properties:
+        attemptId:
+          type: string
+        workItemId:
+          type: string
+        target:
+          type: string
+        hostReferenceId:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        status:
+          type: string
+
+  - name: CanonicalStatusUpdate
+    kind: status
+    summary: Canonical internal status update record shape.
+    schema:
+      type: object
+      required:
+        - workItemId
+        - status
+        - source
+        - observedAt
+      properties:
+        workItemId:
+          type: string
+        attemptId:
+          type: string
+        status:
+          type: string
+        source:
+          type: string
+        observedAt:
+          type: string
+          format: date-time
+        reasonCode:
+          type: string
+        detailMessage:
+          type: string
+
+  - name: CoverageUpdateStatusView
+    kind: response
+    summary: Canonical current status query result.
+    schema:
+      type: object
+      required:
+        - workItemId
+        - workType
+        - currentStatus
+        - terminal
+      properties:
+        workItemId:
+          type: string
+        workType:
+          type: string
+        currentStatus:
+          type: string
+        terminal:
+          type: boolean
+        latestObservedAt:
+          type: string
+          format: date-time
+
+  - name: CoverageUpdateStatusHistory
+    kind: response
+    summary: Canonical status history query result.
+    schema:
+      type: object
+      required:
+        - workItemId
+        - history
+      properties:
+        workItemId:
+          type: string
+        history:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+
+integrations:
+  - name: submit-api-to-dispatch-core
+    from: dispatch-api.submitCoverageUpdate
+    to: host-adapter.sendCoverageUpdateToHost
+    mechanism: queue
+    contracts:
+      - HostCoverageUpdateRequest
+    mapping:
+      workItemId: generated
+      memberId: CoverageUpdateSubmission.memberId
+      planId: CoverageUpdateSubmission.planId
+      effectiveDate: CoverageUpdateSubmission.effectiveDate
+      coverageChanges: CoverageUpdateSubmission.coverageChanges
+
+  - name: host-status-callback-to-dispatch-core
+    from: insurance-host.receiveCoverageUpdateStatusFromHost
+    to: host-adapter.receiveCoverageUpdateStatusFromHost
+    mechanism: webhook
+    contracts:
+      - HostCoverageUpdateStatus
+    correlation:
+      strategy: reference_mapping
+      fields:
+        - hostReferenceId
+
+  - name: dispatch-core-to-host
+    from: host-adapter.sendCoverageUpdateToHost
+    to: insurance-host.receiveCoverageUpdateStatusFromHost
+    mechanism: queue
+    contracts:
+      - HostCoverageUpdateRequest
+
+dispatch:
+  workTypes:
+    - name: CoverageUpdate
+      submissionContract: CoverageUpdateSubmission
+      lifecycleModel: CoverageUpdateLifecycle
+      dispatchTargets:
+        - insurance-host
+      acceptedStatus: accepted
+
+  lifecycleModels:
+    - name: CoverageUpdateLifecycle
+      initialStatus: accepted
+      statuses:
+        - name: accepted
+          category: accepted
+          terminal: false
+        - name: dispatched
+          category: in_progress
+          terminal: false
+        - name: acknowledged_by_host
+          category: in_progress
+          terminal: false
+        - name: completed
+          category: succeeded
+          terminal: true
+        - name: failed
+          category: failed
+          terminal: true
+          requiredDetails:
+            - reasonCode
+      transitions:
+        - from: accepted
+          to: dispatched
+        - from: dispatched
+          to: acknowledged_by_host
+        - from: acknowledged_by_host
+          to: completed
+        - from: accepted
+          to: failed
+        - from: dispatched
+          to: failed
+        - from: acknowledged_by_host
+          to: failed
+
+  dispatchAttempts:
+    enabled: true
+    contract: DispatchAttemptRecord
+    identityFields:
+      - attemptId
+      - workItemId
+      - hostReferenceId
+    statusFields:
+      - status
+      - createdAt
+
+  statusUpdates:
+    contract: CanonicalStatusUpdate
+    sources:
+      - system
+      - insurance-host
+    requiredCommonFields:
+      - workItemId
+      - status
+      - source
+      - observedAt
+
+  correlationRules:
+    - name: host-reference-id-rule
+      appliesTo: HostCoverageUpdateStatus
+      strategy: reference_mapping
+      fields:
+        - hostReferenceId
+
+  surfaces:
+    submit: submitCoverageUpdate
+    queryById: getCoverageUpdateById
+    history: getCoverageUpdateHistory
+    attempts: getCoverageUpdateById

@@ -1,0 +1,158 @@
+manifestVersion: v1alpha1
+kind: SystemDefinition
+metadata:
+  name: member-profile-sync
+  title: Member Profile Sync System
+  summary: Defines a bounded integration system that accepts member profile updates and relays them to an external CRM.
+  tags:
+    - integration
+    - profile
+    - crm
+
+system:
+  domain: member-data
+  scope: Receive normalized profile updates and deliver them to the external CRM boundary.
+  style: integration
+  owners:
+    - architecture
+    - member-platform
+
+components:
+  - name: profile-api
+    type: api
+    summary: Receives normalized profile change requests from upstream callers.
+    boundary: internal
+
+  - name: crm-adapter
+    type: adapter
+    summary: Sends transformed member profile messages to the CRM boundary.
+    boundary: internal
+
+  - name: external-crm
+    type: external_system
+    summary: Downstream CRM system of record for member profile fields.
+    boundary: external
+
+interfaces:
+  - name: submitProfileUpdate
+    component: profile-api
+    direction: inbound
+    mechanism: http
+    summary: Accepts member profile update requests.
+    protocol:
+      method: POST
+      path: /profile-updates
+    contracts:
+      - MemberProfileUpdateRequest
+      - MemberProfileUpdateAcceptedResponse
+
+  - name: publishProfileToCrm
+    component: crm-adapter
+    direction: outbound
+    mechanism: queue
+    summary: Publishes transformed profile updates to the CRM delivery channel.
+    protocol:
+      channel: crm.profile.updates
+    contracts:
+      - CrmProfileUpdateMessage
+
+  - name: receiveProfileFromSyncSystem
+    component: external-crm
+    direction: inbound
+    mechanism: queue
+    summary: Receives profile update messages from the integration system.
+    protocol:
+      channel: crm.profile.updates
+    contracts:
+      - CrmProfileUpdateMessage
+
+contracts:
+  - name: MemberProfileUpdateRequest
+    kind: request
+    summary: Canonical request shape for updating member profile data.
+    schema:
+      type: object
+      required:
+        - memberId
+        - effectiveAt
+        - profile
+      properties:
+        memberId:
+          type: string
+        effectiveAt:
+          type: string
+          format: date-time
+        profile:
+          type: object
+          required:
+            - firstName
+            - lastName
+          properties:
+            firstName:
+              type: string
+            lastName:
+              type: string
+            email:
+              type: string
+              format: email
+            phone:
+              type: string
+    examples:
+      - memberId: M12345
+        effectiveAt: '2026-03-08T12:00:00Z'
+        profile:
+          firstName: Jane
+          lastName: Doe
+          email: jane@example.com
+
+  - name: MemberProfileUpdateAcceptedResponse
+    kind: response
+    summary: Immediate acceptance response for a valid profile update request.
+    schema:
+      type: object
+      required:
+        - requestId
+        - acceptedAt
+      properties:
+        requestId:
+          type: string
+        acceptedAt:
+          type: string
+          format: date-time
+
+  - name: CrmProfileUpdateMessage
+    kind: message
+    summary: Outbound message delivered to the CRM-facing channel.
+    schema:
+      type: object
+      required:
+        - requestId
+        - memberId
+        - profile
+      properties:
+        requestId:
+          type: string
+        memberId:
+          type: string
+        profile:
+          type: object
+          additionalProperties: true
+
+integrations:
+  - name: api-to-crm-adapter
+    from: profile-api.submitProfileUpdate
+    to: crm-adapter.publishProfileToCrm
+    mechanism: queue
+    contracts:
+      - CrmProfileUpdateMessage
+    mapping:
+      requestId: generated
+      memberId: MemberProfileUpdateRequest.memberId
+      profile: MemberProfileUpdateRequest.profile
+
+  - name: crm-adapter-to-external-crm
+    from: crm-adapter.publishProfileToCrm
+    to: external-crm.receiveProfileFromSyncSystem
+    mechanism: queue
+    contracts:
+      - CrmProfileUpdateMessage

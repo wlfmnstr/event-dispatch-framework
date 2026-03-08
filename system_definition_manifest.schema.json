@@ -1,0 +1,405 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/schemas/system-definition-manifest-v1alpha1.schema.json",
+  "title": "System Definition Manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "manifestVersion",
+    "kind",
+    "metadata",
+    "system",
+    "components",
+    "interfaces",
+    "contracts",
+    "integrations"
+  ],
+  "properties": {
+    "manifestVersion": {
+      "type": "string",
+      "const": "v1alpha1"
+    },
+    "kind": {
+      "type": "string",
+      "const": "SystemDefinition"
+    },
+    "metadata": {
+      "$ref": "#/$defs/metadata"
+    },
+    "system": {
+      "$ref": "#/$defs/system"
+    },
+    "components": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/component"
+      }
+    },
+    "interfaces": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/interface"
+      }
+    },
+    "contracts": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/contract"
+      }
+    },
+    "integrations": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/integration"
+      }
+    },
+    "dispatch": {
+      "$ref": "#/$defs/dispatch"
+    },
+    "realization": {
+      "type": "object",
+      "description": "Reserved for future downstream hints. Intentionally unconstrained in v0.1.",
+      "additionalProperties": true
+    }
+  },
+  "$defs": {
+    "nonEmptyString": {
+      "type": "string",
+      "minLength": 1
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "title", "summary"],
+      "properties": {
+        "name": { "$ref": "#/$defs/nonEmptyString" },
+        "title": { "$ref": "#/$defs/nonEmptyString" },
+        "summary": { "$ref": "#/$defs/nonEmptyString" },
+        "tags": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/nonEmptyString" },
+          "uniqueItems": true
+        }
+      }
+    },
+    "system": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["domain", "scope", "style"],
+      "properties": {
+        "domain": { "$ref": "#/$defs/nonEmptyString" },
+        "scope": { "$ref": "#/$defs/nonEmptyString" },
+        "style": {
+          "type": "string",
+          "enum": ["integration", "dispatch", "application"]
+        },
+        "owners": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/nonEmptyString" }
+        },
+        "notes": { "$ref": "#/$defs/nonEmptyString" }
+      }
+    },
+    "component": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "type", "summary", "boundary"],
+      "properties": {
+        "name": { "$ref": "#/$defs/nonEmptyString" },
+        "type": {
+          "type": "string",
+          "enum": [
+            "api",
+            "service",
+            "worker",
+            "store",
+            "adapter",
+            "external_system",
+            "batch_processor",
+            "other"
+          ]
+        },
+        "summary": { "$ref": "#/$defs/nonEmptyString" },
+        "boundary": {
+          "type": "string",
+          "enum": ["internal", "external"]
+        },
+        "tags": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/nonEmptyString" },
+          "uniqueItems": true
+        }
+      }
+    },
+    "mechanism": {
+      "type": "string",
+      "enum": [
+        "http",
+        "queue",
+        "topic",
+        "event_stream",
+        "file_exchange",
+        "batch",
+        "webhook",
+        "polling",
+        "custom"
+      ]
+    },
+    "contractRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z][A-Za-z0-9_-]*$"
+    },
+    "interface": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "component", "direction", "mechanism", "summary", "contracts"],
+      "properties": {
+        "name": { "$ref": "#/$defs/nonEmptyString" },
+        "component": { "$ref": "#/$defs/nonEmptyString" },
+        "direction": {
+          "type": "string",
+          "enum": ["inbound", "outbound", "bidirectional"]
+        },
+        "mechanism": { "$ref": "#/$defs/mechanism" },
+        "summary": { "$ref": "#/$defs/nonEmptyString" },
+        "protocol": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "contracts": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/contractRef" },
+          "uniqueItems": true
+        }
+      }
+    },
+    "contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "kind", "schema"],
+      "properties": {
+        "name": { "$ref": "#/$defs/contractRef" },
+        "kind": {
+          "type": "string",
+          "enum": ["request", "response", "event", "message", "entity", "status", "shared"]
+        },
+        "summary": { "$ref": "#/$defs/nonEmptyString" },
+        "schema": {
+          "type": "object",
+          "description": "JSON-Schema-like payload definition authored inline or generated elsewhere.",
+          "additionalProperties": true
+        },
+        "examples": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        }
+      }
+    },
+    "endpointRef": {
+      "type": "string",
+      "pattern": "^[A-Za-z][A-Za-z0-9_-]*\.[A-Za-z][A-Za-z0-9_-]*$"
+    },
+    "integration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "from", "to", "mechanism", "contracts"],
+      "properties": {
+        "name": { "$ref": "#/$defs/nonEmptyString" },
+        "from": { "$ref": "#/$defs/endpointRef" },
+        "to": { "$ref": "#/$defs/endpointRef" },
+        "mechanism": { "$ref": "#/$defs/mechanism" },
+        "contracts": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/contractRef" },
+          "uniqueItems": true
+        },
+        "correlation": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "mapping": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      }
+    },
+    "dispatch": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "workTypes",
+        "lifecycleModels",
+        "dispatchAttempts",
+        "statusUpdates",
+        "correlationRules",
+        "surfaces"
+      ],
+      "properties": {
+        "workTypes": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/workType" }
+        },
+        "lifecycleModels": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/lifecycleModel" }
+        },
+        "dispatchAttempts": {
+          "$ref": "#/$defs/dispatchAttempts"
+        },
+        "statusUpdates": {
+          "$ref": "#/$defs/statusUpdates" 
+        },
+        "correlationRules": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/correlationRule" }
+        },
+        "surfaces": {
+          "$ref": "#/$defs/surfaces"
+        }
+      }
+    },
+    "workType": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "submissionContract", "lifecycleModel", "dispatchTargets"],
+      "properties": {
+        "name": { "$ref": "#/$defs/nonEmptyString" },
+        "submissionContract": { "$ref": "#/$defs/contractRef" },
+        "lifecycleModel": { "$ref": "#/$defs/nonEmptyString" },
+        "dispatchTargets": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/nonEmptyString" },
+          "uniqueItems": true
+        },
+        "acceptedStatus": { "$ref": "#/$defs/nonEmptyString" }
+      }
+    },
+    "lifecycleModel": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "initialStatus", "statuses", "transitions"],
+      "properties": {
+        "name": { "$ref": "#/$defs/nonEmptyString" },
+        "initialStatus": { "$ref": "#/$defs/nonEmptyString" },
+        "statuses": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/statusDefinition" }
+        },
+        "transitions": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/transitionDefinition" }
+        }
+      }
+    },
+    "statusDefinition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "category", "terminal"],
+      "properties": {
+        "name": { "$ref": "#/$defs/nonEmptyString" },
+        "category": {
+          "type": "string",
+          "enum": ["accepted", "in_progress", "succeeded", "failed", "cancelled", "unknown"]
+        },
+        "terminal": { "type": "boolean" },
+        "requiredDetails": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/nonEmptyString" },
+          "uniqueItems": true
+        }
+      }
+    },
+    "transitionDefinition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["from", "to"],
+      "properties": {
+        "from": { "$ref": "#/$defs/nonEmptyString" },
+        "to": { "$ref": "#/$defs/nonEmptyString" },
+        "notes": { "$ref": "#/$defs/nonEmptyString" }
+      }
+    },
+    "dispatchAttempts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled", "contract", "identityFields", "statusFields"],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "contract": { "$ref": "#/$defs/contractRef" },
+        "identityFields": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/nonEmptyString" },
+          "uniqueItems": true
+        },
+        "statusFields": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/nonEmptyString" },
+          "uniqueItems": true
+        }
+      }
+    },
+    "statusUpdates": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["contract", "sources", "requiredCommonFields"],
+      "properties": {
+        "contract": { "$ref": "#/$defs/contractRef" },
+        "sources": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/nonEmptyString" },
+          "uniqueItems": true
+        },
+        "requiredCommonFields": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/nonEmptyString" },
+          "uniqueItems": true
+        }
+      }
+    },
+    "correlationRule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "appliesTo", "strategy", "fields"],
+      "properties": {
+        "name": { "$ref": "#/$defs/nonEmptyString" },
+        "appliesTo": { "$ref": "#/$defs/nonEmptyString" },
+        "strategy": {
+          "type": "string",
+          "enum": ["exact_field_match", "composite_key", "reference_mapping", "custom"]
+        },
+        "fields": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/nonEmptyString" },
+          "uniqueItems": true
+        }
+      }
+    },
+    "surfaces": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["submit", "queryById", "history", "attempts"],
+      "properties": {
+        "submit": { "$ref": "#/$defs/nonEmptyString" },
+        "queryById": { "$ref": "#/$defs/nonEmptyString" },
+        "history": { "$ref": "#/$defs/nonEmptyString" },
+        "attempts": { "$ref": "#/$defs/nonEmptyString" }
+      }
+    }
+  }
+}
